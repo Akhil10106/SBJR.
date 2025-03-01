@@ -894,6 +894,9 @@ function validateProductForm() {
 function addProduct() {
     if (!validateProductForm()) return;
     
+    console.log('Current user:', currentUser);
+    console.log('User ID:', currentUser?.uid);
+    
     showLoading(true);
     const name = sanitizeInput(document.getElementById('product-name').value.trim());
     const description = sanitizeInput(document.getElementById('product-description').value.trim());
@@ -906,8 +909,21 @@ function addProduct() {
         return;
     }
     
-    const storageRef = storage.ref('product-images/' + Date.now() + '_' + imageFile.name);
-    storageRef.put(imageFile)
+    if (!currentUser) {
+        showError('Please log in as admin');
+        return;
+    }
+
+    // Verify admin status
+    db.collection('users').doc(currentUser.uid).get()
+        .then(doc => {
+            if (!doc.exists || !doc.data().isAdmin) {
+                throw new Error('Admin privileges required');
+            }
+            
+            const storageRef = storage.ref('product-images/' + Date.now() + '_' + imageFile.name);
+            return storageRef.put(imageFile);
+        })
         .then(() => storageRef.getDownloadURL())
         .then(url => {
             return db.collection('products').add({
@@ -925,6 +941,7 @@ function addProduct() {
             updateAdminProductList();
         })
         .catch(error => {
+            console.error('Error details:', error);
             showError(handleFirebaseError(error, 'adding product'));
         })
         .finally(() => showLoading(false));
