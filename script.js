@@ -35,8 +35,7 @@ function handleFirebaseError(error, action) {
         'auth/invalid-email': 'Invalid email format',
         'auth/weak-password': 'Password should be at least 6 characters',
         'auth/network-request-failed': 'Network error. Please check your connection',
-        'storage/unauthorized': 'Unauthorized access to storage - Check admin privileges and security rules',
-        'auth/unauthorized-domain': 'This domain is not authorized for OAuth operations. Add it in Firebase Console.'
+        'storage/unauthorized': 'Unauthorized access to storage'
     };
     return errorMessages[error.code] || `Error during ${action}: ${error.message}`;
 }
@@ -168,13 +167,9 @@ function login() {
 
 function loginWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    console.log('Attempting Google login...');
-    console.log('Current domain:', window.location.hostname);
-    console.log('Full URL:', window.location.href);
     showLoading(true);
     firebase.auth().signInWithPopup(provider)
         .then((result) => {
-            console.log('Google login success:', result.user);
             return checkUserExists(result.user.email);
         })
         .then((userExists) => {
@@ -186,7 +181,6 @@ function loginWithGoogle() {
             }
         })
         .catch((error) => {
-            console.error('Google login error:', error);
             showError(handleFirebaseError(error, 'Google login'));
         })
         .finally(() => showLoading(false));
@@ -227,15 +221,6 @@ function register() {
         .finally(() => showLoading(false));
 }
 
-function createUserProfile(user, name) {
-    return db.collection('users').doc(user.uid).set({
-        name: name,
-        email: user.email,
-        isAdmin: false,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-}
-
 function registerWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     showLoading(true);
@@ -266,13 +251,6 @@ function registerWithGoogle() {
             showError(handleFirebaseError(error, 'Google registration'));
         })
         .finally(() => showLoading(false));
-}
-
-function checkUserExists(email) {
-    return db.collection('users')
-        .where('email', '==', email)
-        .get()
-        .then((querySnapshot) => !querySnapshot.empty);
 }
 
 // Cart Functions
@@ -354,7 +332,7 @@ function showHome() {
                     <div class="featured-product">
                         <img src="${product.image}" alt="${product.name}" class="featured-product-image">
                         <h3>${product.name}</h3>
-                        <p>₹${product.price}</p>
+                        <p>â‚¹${product.price}</p>
                         <button onclick="showProductDetails('${doc.id}')" class="glow-button">View Details</button>
                     </div>
                 `;
@@ -408,7 +386,7 @@ function createProductCard(id, product) {
             <a href="#" onclick="showProductDetails('${id}'); return false;">
                 <img src="${product.image}" alt="${product.name}" class="product-image">
                 <div class="product-title">${product.name}</div>
-                <div class="product-price">₹${product.price}</div>
+                <div class="product-price">â‚¹${product.price}</div>
                 <div class="product-description">${product.description.substring(0, 50)}...</div>
             </a>
             <button onclick="addToCart('${id}')" class="add-to-cart">Add to Cart</button>
@@ -427,7 +405,7 @@ function showProductDetails(productId) {
                     <div class="product-info">
                         <h2>${product.name}</h2>
                         <p class="product-description">${product.description}</p>
-                        <p class="product-price">₹${product.price}</p>
+                        <p class="product-price">â‚¹${product.price}</p>
                         <button onclick="addToCart('${doc.id}')" class="glow-button">Add to Cart</button>
                         <button onclick="showShop()" class="glow-button">Back to Shop</button>
                     </div>
@@ -478,20 +456,20 @@ function showCart() {
                     <img src="${product.image}" alt="${product.name}" class="cart-item-image">
                     <div class="cart-item-details">
                         <h3>${product.name}</h3>
-                        <p>Price: ₹${product.price}</p>
+                        <p>Price: â‚¹${product.price}</p>
                         <div class="quantity-control">
                             <button onclick="updateCartItemQuantity(${index}, -1)" class="quantity-btn">-</button>
                             <span class="quantity">${product.quantity}</span>
                             <button onclick="updateCartItemQuantity(${index}, 1)" class="quantity-btn">+</button>
                         </div>
-                        <p>Item Total: ₹${itemTotal.toFixed(2)}</p>
+                        <p>Item Total: â‚¹${itemTotal.toFixed(2)}</p>
                         <button onclick="removeFromCart(${index})" class="remove-btn">Remove</button>
                     </div>
                 </div>
             `;
         });
         content += `</div><div class="cart-summary">
-            <h3>Total: ₹${total.toFixed(2)}</h3>
+            <h3>Total: â‚¹${total.toFixed(2)}</h3>
             <button onclick="checkout()" class="glow-button">Checkout</button>
         </div>`;
     }
@@ -557,12 +535,12 @@ function saveCouponToFirebase(couponCode, amount) {
 
 function displayCouponCode(couponCode, amount) {
     let cartItemsHtml = cart.map(item => `
-        <li>${item.name} - Quantity: ${item.quantity} - Price: ₹${(item.price * item.quantity).toFixed(2)}</li>
+        <li>${item.name} - Quantity: ${item.quantity} - Price: â‚¹${(item.price * item.quantity).toFixed(2)}</li>
     `).join('');
     
     document.getElementById('content').innerHTML = `
         <h2>Checkout Complete</h2>
-        <p>Total: ₹${amount.toFixed(2)}</p>
+        <p>Total: â‚¹${amount.toFixed(2)}</p>
         <h3>Order Items:</h3>
         <ul>${cartItemsHtml}</ul>
         <p>Coupon Code: <span class="coupon-code">${couponCode}</span></p>
@@ -949,6 +927,7 @@ function addProduct() {
         return;
     }
 
+    // Check admin status
     db.collection('users').doc(currentUser.uid).get()
         .then(doc => {
             if (!doc.exists) {
@@ -1006,7 +985,7 @@ function updateAdminProductList() {
             li.innerHTML = `
                 <img src="${product.image}" alt="${product.name}" style="width: 50px;">
                 <div class="product-info">
-                    <strong>${product.name}</strong> - ₹${product.price} (Stock: ${product.stock})
+                    <strong>${product.name}</strong> - â‚¹${product.price} (Stock: ${product.stock})
                     <p>${product.description}</p>
                 </div>
                 <div class="product-actions">
@@ -1306,17 +1285,8 @@ function logout() {
         .finally(() => showLoading(false));
 }
 
-// Navigation Toggle Function
-function toggleNav() {
-    const navLinks = document.querySelector('.nav-links');
-    navLinks.classList.toggle('active');
-}
-
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
-    const navToggle = document.querySelector('.nav-toggle');
-    navToggle.addEventListener('click', toggleNav);
-    
     updateCartCount();
     initializeTheme();
     updateSeasonDisplay();
