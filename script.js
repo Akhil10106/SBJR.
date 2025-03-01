@@ -87,6 +87,18 @@ function toggleAuthForm() {
 }
 
 auth.onAuthStateChanged(user => {
+    console.log('Auth State Changed:');
+    console.log('User:', user);
+    console.log('UID:', user?.uid);
+    console.log('Email:', user?.email);
+    if (user) {
+        db.collection('users').doc(user.uid).get().then(doc => {
+            console.log('User Data:', doc.data());
+        }).catch(error => {
+            console.error('Error fetching user data:', error);
+        });
+    }
+    
     if (user) {
         currentUser = user;
         loadCartFromFirestore().then(() => {
@@ -894,9 +906,14 @@ function validateProductForm() {
 function addProduct() {
     if (!validateProductForm()) return;
     
-    console.log('Current user:', currentUser);
-    console.log('User ID:', currentUser?.uid);
+    console.log('Adding product...');
+    console.log('Current User:', currentUser);
     
+    if (!currentUser) {
+        showError('Please log in as admin');
+        return;
+    }
+
     showLoading(true);
     const name = sanitizeInput(document.getElementById('product-name').value.trim());
     const description = sanitizeInput(document.getElementById('product-description').value.trim());
@@ -906,26 +923,33 @@ function addProduct() {
     
     if (!imageFile) {
         showError('Please select an image');
-        return;
-    }
-    
-    if (!currentUser) {
-        showError('Please log in as admin');
+        showLoading(false);
         return;
     }
 
-    // Verify admin status
+    // Check admin status
     db.collection('users').doc(currentUser.uid).get()
         .then(doc => {
-            if (!doc.exists || !doc.data().isAdmin) {
+            if (!doc.exists) {
+                throw new Error('User document not found');
+            }
+            console.log('User data:', doc.data());
+            if (!doc.data().isAdmin) {
                 throw new Error('Admin privileges required');
             }
+
+            const fileName = Date.now() + '_' + imageFile.name;
+            const storageRef = storage.ref('product-images/' + fileName);
+            console.log('Uploading to:', storageRef.fullPath);
             
-            const storageRef = storage.ref('product-images/' + Date.now() + '_' + imageFile.name);
             return storageRef.put(imageFile);
         })
-        .then(() => storageRef.getDownloadURL())
+        .then(snapshot => {
+            console.log('Upload successful:', snapshot);
+            return snapshot.ref.getDownloadURL();
+        })
         .then(url => {
+            console.log('Download URL:', url);
             return db.collection('products').add({
                 name,
                 description,
@@ -935,16 +959,19 @@ function addProduct() {
                 searchTerms: name.toLowerCase().split(' ').concat(description.toLowerCase().split(' '))
             });
         })
-        .then(() => {
-            showSuccess('Product added');
+        .then(docRef => {
+            console.log('Product added with ID:', docRef.id);
+            showSuccess('Product added successfully');
             document.getElementById('add-product-form').reset();
             updateAdminProductList();
         })
         .catch(error => {
-            console.error('Error details:', error);
+            console.error('Error adding product:', error);
             showError(handleFirebaseError(error, 'adding product'));
         })
-        .finally(() => showLoading(false));
+        .finally(() => {
+            showLoading(false);
+        });
 }
 
 function updateAdminProductList() {
