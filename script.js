@@ -35,7 +35,8 @@ function handleFirebaseError(error, action) {
         'auth/invalid-email': 'Invalid email format',
         'auth/weak-password': 'Password should be at least 6 characters',
         'auth/network-request-failed': 'Network error. Please check your connection',
-        'storage/unauthorized': 'Unauthorized access to storage'
+        'storage/unauthorized': 'Unauthorized access to storage - Check admin privileges and security rules',
+        'auth/unauthorized-domain': 'This domain is not authorized for OAuth operations. Add it in Firebase Console.'
     };
     return errorMessages[error.code] || `Error during ${action}: ${error.message}`;
 }
@@ -167,9 +168,13 @@ function login() {
 
 function loginWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
+    console.log('Attempting Google login...');
+    console.log('Current domain:', window.location.hostname);
+    console.log('Full URL:', window.location.href);
     showLoading(true);
     firebase.auth().signInWithPopup(provider)
         .then((result) => {
+            console.log('Google login success:', result.user);
             return checkUserExists(result.user.email);
         })
         .then((userExists) => {
@@ -181,6 +186,7 @@ function loginWithGoogle() {
             }
         })
         .catch((error) => {
+            console.error('Google login error:', error);
             showError(handleFirebaseError(error, 'Google login'));
         })
         .finally(() => showLoading(false));
@@ -221,6 +227,15 @@ function register() {
         .finally(() => showLoading(false));
 }
 
+function createUserProfile(user, name) {
+    return db.collection('users').doc(user.uid).set({
+        name: name,
+        email: user.email,
+        isAdmin: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
 function registerWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     showLoading(true);
@@ -251,6 +266,13 @@ function registerWithGoogle() {
             showError(handleFirebaseError(error, 'Google registration'));
         })
         .finally(() => showLoading(false));
+}
+
+function checkUserExists(email) {
+    return db.collection('users')
+        .where('email', '==', email)
+        .get()
+        .then((querySnapshot) => !querySnapshot.empty);
 }
 
 // Cart Functions
@@ -927,7 +949,6 @@ function addProduct() {
         return;
     }
 
-    // Check admin status
     db.collection('users').doc(currentUser.uid).get()
         .then(doc => {
             if (!doc.exists) {
@@ -1285,8 +1306,17 @@ function logout() {
         .finally(() => showLoading(false));
 }
 
+// Navigation Toggle Function
+function toggleNav() {
+    const navLinks = document.querySelector('.nav-links');
+    navLinks.classList.toggle('active');
+}
+
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
+    const navToggle = document.querySelector('.nav-toggle');
+    navToggle.addEventListener('click', toggleNav);
+    
     updateCartCount();
     initializeTheme();
     updateSeasonDisplay();
